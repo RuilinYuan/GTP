@@ -1,0 +1,149 @@
+from pathlib import Path
+import time
+import torch
+import torch.nn as nn
+from pprint import pprint
+
+from utils import load_state_dict, LossMeter
+from pprint import pformat
+
+proj_dir = Path(__file__).resolve().parent.parent
+
+
+class TrainerBase(object):
+    def __init__(self, args, train_loader=None, val_loader=None, test_loader=None, train=True):
+        self.args = args
+
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.test_loader = test_loader
+        self.model = None
+
+        self.verbose = True
+        if self.args.distributed:
+            if self.args.gpu != 0:
+                self.verbose = False
+
+        if self.args.tokenizer is None:
+            self.args.tokenizer = self.args.backbone
+
+    def create_config(self):
+        from transformers import AutoConfig
+        config = AutoConfig.from_pretrained(self.args.root_path + self.args.backbone)
+        args = self.args
+        config.dropout_rate = args.dropout
+        config.dropout = args.dropout
+        config.attention_dropout = args.dropout
+        config.activation_dropout = args.dropout
+        config.losses = args.losses
+        return config
+
+
+    def create_optimizer_and_scheduler(self):
+        if self.verbose:
+            print('Building Optimizer')
+
+        lr_scheduler = None
+
+        if 'adamw' in self.args.optim:
+            from transformers.optimization import AdamW, get_linear_schedule_with_warmup, get_constant_schedule
+
+            batch_per_epoch = len(self.train_loader)
+            t_total = batch_per_epoch // self.args.gradient_accumulation_steps * self.args.epoch
+            ## warmup 学习率调度（Learning Rate Scheduler）中非常常见的一部分，意思是：在训练刚开始时，采用「warmup」策略缓慢提升学习率，以防训练初期不稳定。
+            warmup_ratio = self.args.warmup_ratio
+            warmup_iters = int(t_total * warmup_ratio)
+
+            if self.verbose:
+                print("Batch per epoch: %d" % batch_per_epoch)
+                print("Total Iters: %d" % t_total) ## 进行多少次反向传播（backward）+ 参数更新（optimizer.step()）
+                print('Warmup ratio:', warmup_ratio)## 表示 warmup 阶段所占的训练比例。
+                print("Warm up Iters: %d" % warmup_iters)  ##表示 warmup 持续的迭代步数是多少（用整数表示）
+
+            ##  bias 和 LayerNorm.weight不进行权重衰减，其他参数权重衰减
+            no_decay = ["bias", "LayerNorm.weight"]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [p for n, p in self.model.named_parameters() if
+                               not any(nd in n for nd in no_decay) and not any(
+                                   hn in n for hn in ['hypernet', 'mask_layer', 'tfidf_expander', 'pop_expander'])],
+                    "weight_decay": self.args.weight_decay,
+                },
+                {
+                    "params": [p for n, p in self.model.named_parameters() if
+                               any(nd in n for nd in no_decay) and not any(
+                                   hn in n for hn in ['hypernet', 'mask_layer', 'tfidf_expander', 'pop_expander'])],
+                    "weight_decay": 0.0,
+                },
+                {
+                    "params": [p for n, p in self.model.named_parameters() if
+                               not any(nd in n for nd in no_decay) and any(
+                                   hn in n for hn in ['hypernet', 'mask_layer', 'tfidf_expander', 'pop_expander'])],
+                    "weight_decay": self.args.weight_decay,
+                    "lr": self.args.hypernet_lr,
+                },
+                {
+                    "params": [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay) and any(
+                        hn in n for hn in ['hypernet', 'mask_layer', 'tfidf_expander', 'pop_expander'])],
+                    "weight_decay": 0.0,
+                    "lr": self.args.hypernet_lr,
+                },
+            ]
+
+            optim = AdamW(optimizer_grouped_parameters,
+                          lr=self.args.lr, eps=self.args.adam_eps)
+            lr_scheduler = get_linear_schedule_with_warmup(
+                optim, warmup_iters, t_total)
+
+        else:
+            optim = self.args.optimizer(
+                list(self.model.parameters()), self.args.lr)
+
+        return optim, lr_scheduler
+
+    def load_checkpoint(self, ckpt_path):
+        state_dict = load_state_dict(ckpt_path, 'cpu')
+        results = self.model.load_state_dict(state_dict, strict=False)
+        if self.verbose:
+            print('Model loaded from ', ckpt_path)
+            pprint(results)
+
+    def init_weights(self):
+
+        def init_bert_weights(module):
+            """ Initialize the weights."""
+            if isinstance(module, (nn.Linear, nn.Embedding)):
+                module.weight.data.normal_(mean=0.0, std=1)
+            elif isinstance(module, nn.LayerNorm):
+                module.bias.data.zero_()
+                module.weight.data.fill_(1.0)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+
+        self.model.apply(init_bert_weights)
+        self.model.init_weights()
+
+    def predict(self):
+        pass
+
+    def evaluate(self):
+        pass
+
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def load(self, path, loc=None):
+        if loc is None and hasattr(self.args, 'gpu'):
+            loc = f'cuda:{self.args.gpu}'
+        state_dict = torch.load("%s.pth" % path, map_location=loc)
+        results = self.model.load_state_dict(state_dict, strict=False)
+        if self.verbose:
+            print('Model loaded from ', path)
+            pprint(results)
+
+    def remain_time(self, epoch_start_time, step_i, loader_length):
+        remain_time = (time.time() - epoch_start_time) * (loader_length - step_i - 1) / (step_i + 1)
+        remain_hour = remain_time // 3600
+        remain_min = (remain_time-remain_hour*3600) // 60
+        remain_sec = round(remain_time-remain_hour*3600-remain_min*60, 4)
+        return int(remain_hour), int(remain_min), remain_sec
