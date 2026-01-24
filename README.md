@@ -29,24 +29,27 @@ Please keep the following folder structure, download the dataset from the offici
 ### STEP 2: Preprocess the dataset.
 * python preprocess_amazon.py --dataset=Office
 
-### STEP 3: Pre-training the ranker model
+### STEP 3: Pre-training the ranker model(STAPLE)
 * For multi GPUs:
   * nohup python run_gtp.py --dataset=Office --num_gpus=4 --batch_size=24 --distributed --multiGPU --valid_ratio=0.1 --train_stage=1 --thre 0.36 > Office_stage1.log 2>&1 &  
 * For single GPU:
   * nohup python run_gtp.py --dataset=Office --batch_size=24 --valid_ratio=0.1 --train_stage=1 --thre 0.36> Office_stage1.log 2>&1 &
 
-### STEP 4: Fine-tuning the ranker model
+### STEP 4: Fine-tuning the ranker model(STAPLE)
 * For multi GPUs:
   * nohup python run_gtp.py --dataset=Office --num_gpus=4 --batch_size=24 --distributed --multiGPU --valid_ratio=0.1 --train_stage=2 > Office_stage2.log 2>&1 &  
 * For single GPU:
   * nohup python run_gtp.py --dataset=Office --batch_size=24 --valid_ratio=0.1 --train_stage=2 > Office_stage2.log 2>&1 &  
 
-### STEP 5: Self-distillation
+### STEP 5: Self-distillation(STAPLE)
 * For multi GPUs:
   * nohup python run_gtp.py --dataset=Office --num_gpus=4 --batch_size=246 --distributed --multiGPU --valid_ratio=0.1 --train_stage=3 > Office_stage3.log 2>&1 &  
 * For single GPU:
   * nohup python run_gtp.py --dataset=Office --batch_size=24 --valid_ratio=0.1 --train_stage=3 > Office_stage3.log 2>&1 &  
 
+### STEP 6: Test Model
+    python test_staple.py --dataset Office --train_stage 3 --thre 0.36
+    
 ### Notes:
 * In our experiments, we use 4 gpus and the batch size on each gpu is 24. Thus the total batch size is 96.
 * The batch size on each gpu is important in stage 3 because the value of sampled cross-entropy loss is related to the negatives, and we sample (batch_size * 10) negative items for each batch. Changing the batch size may not get the ideal output.
