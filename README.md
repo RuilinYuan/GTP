@@ -1,7 +1,6 @@
 # GTP
 
-Code for SIGIR-2026 Full Paper:  
-**GTP: Mitigating Popularity Bias in PLM-based Sequential Recommendation via Group-Aware Token Pruning**
+PyTorch implementation for the paper **"GTP: Mitigating Popularity Bias in PLM-based Sequential Recommendation via Group-Aware Token Pruning"**. The paper has been accepted for presentation at the RecSys 2026 conference. Thank you for your interest, support, and citation!
 
 ### STEP 0: Prepare the environment
 * conda create -n gtp python=3.8
@@ -48,7 +47,7 @@ Please keep the following folder structure, download the dataset from the offici
   * nohup python run_gtp.py --dataset=Office --batch_size=24 --valid_ratio=0.1 --train_stage=3 > Office_stage3.log 2>&1 &  
 
 ### STEP 6: Test Model
-  *  python test_staple.py --dataset Office --train_stage 3 --thre 0.36
+  *  python test_gtp.py --dataset Office --train_stage 3 --thre 0.36
     
 ### Notes:
 * In our experiments, we use 4 gpus and the batch size on each gpu is 24. Thus the total batch size is 96.
