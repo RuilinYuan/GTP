@@ -28,19 +28,19 @@ Please keep the following folder structure, download the dataset from the offici
 ### STEP 2: Preprocess the dataset.
 * python preprocess_amazon.py --dataset=Office
 
-### STEP 3: Pre-training the ranker model(STAPLE)
+### STEP 3: Pre-training the ranker model(GTP)
 * For multi GPUs:
   * nohup python run_gtp.py --dataset=Office --num_gpus=4 --batch_size=24 --distributed --multiGPU --valid_ratio=0.1 --train_stage=1 --thre 0.36 > Office_stage1.log 2>&1 &  
 * For single GPU:
   * nohup python run_gtp.py --dataset=Office --batch_size=24 --valid_ratio=0.1 --train_stage=1 --thre 0.36> Office_stage1.log 2>&1 &
 
-### STEP 4: Fine-tuning the ranker model(STAPLE)
+### STEP 4: Fine-tuning the ranker model(GTP)
 * For multi GPUs:
   * nohup python run_gtp.py --dataset=Office --num_gpus=4 --batch_size=24 --distributed --multiGPU --valid_ratio=0.1 --train_stage=2 > Office_stage2.log 2>&1 &  
 * For single GPU:
   * nohup python run_gtp.py --dataset=Office --batch_size=24 --valid_ratio=0.1 --train_stage=2 > Office_stage2.log 2>&1 &  
 
-### STEP 5: Self-distillation(STAPLE)
+### STEP 5: Self-distillation(GTP)
 * For multi GPUs:
   * nohup python run_gtp.py --dataset=Office --num_gpus=4 --batch_size=246 --distributed --multiGPU --valid_ratio=0.1 --train_stage=3 > Office_stage3.log 2>&1 &  
 * For single GPU:
